@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import type { GoogleTranslateResponse } from '../types/translation';
 
 interface ArticleReaderProps {
   title: string;
@@ -23,14 +24,11 @@ export const ArticleReader: React.FC<ArticleReaderProps> = ({ title, content, ur
   };
 
   const [articleContent, setArticleContent] = useState(cleanContent(content));
-  const [isExpanded, setIsExpanded] = useState(false);
 
   // Full translation states
   const [fullTranslation, setFullTranslation] = useState<string | null>(null);
   const [showFullTranslation, setShowFullTranslation] = useState(false);
   const [isFullLoading, setIsFullLoading] = useState(false);
-
-  const words = articleContent.split(/\s+/);
 
   const handleWordClick = async (word: string) => {
     const cleanWord = word.replace(/[.,/#!$%^&*;:{}=\-_`~()"'[\]]/g, "");
@@ -48,9 +46,9 @@ export const ArticleReader: React.FC<ArticleReaderProps> = ({ title, content, ur
     setIsLoading(true);
     try {
       const res = await fetch(`https://translate.googleapis.com/translate_a/single?client=gtx&sl=en&tl=th&dt=t&q=${encodeURIComponent(cleanWord)}`);
-      const data = await res.json();
-      setTranslation(data[0][0][0]);
-    } catch (err) {
+      const data = (await res.json()) as GoogleTranslateResponse;
+      setTranslation(data[0]?.[0]?.[0] ?? "No translation found");
+    } catch {
       setTranslation("Error translating");
     } finally {
       setIsLoading(false);
@@ -66,11 +64,11 @@ export const ArticleReader: React.FC<ArticleReaderProps> = ({ title, content, ur
     setIsFullLoading(true);
     try {
       const res = await fetch(`https://translate.googleapis.com/translate_a/single?client=gtx&sl=en&tl=th&dt=t&q=${encodeURIComponent(articleContent)}`);
-      const data = await res.json();
-      const fullText = data[0].map((segment: any) => segment[0]).join("");
+      const data = (await res.json()) as GoogleTranslateResponse;
+      const fullText = data[0].map((segment) => segment[0]).join("");
       setFullTranslation(fullText);
       setShowFullTranslation(true);
-    } catch (err) {
+    } catch {
       alert("Failed to translate.");
     } finally {
       setIsFullLoading(false);
@@ -91,7 +89,6 @@ export const ArticleReader: React.FC<ArticleReaderProps> = ({ title, content, ur
     const extraParagraph = "\n\n" + (mockParagraphs[nextParaIndex % mockParagraphs.length]);
     
     setArticleContent(prev => prev + extraParagraph);
-    setIsExpanded(true); 
     
     // Always reset translation so user can translate the newly added content
     setFullTranslation(null);

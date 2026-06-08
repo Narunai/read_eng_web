@@ -1,9 +1,10 @@
-import { useState, useEffect } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { SearchBar } from './components/SearchBar';
 import { NewsCard } from './components/NewsCard';
 import { ArticleReader } from './components/ArticleReader';
 import { fetchNews, fetchTopHeadlines } from './services/newsService';
 import type { NewsArticle } from './types/news';
+import type { GoogleTranslateResponse } from './types/translation';
 
 function App() {
   const [articles, setArticles] = useState<NewsArticle[]>([]);
@@ -73,33 +74,7 @@ function App() {
 
   const [trendingKeywords, setTrendingKeywords] = useState<{ label: string, query: string }[]>([]);
 
-  useEffect(() => {
-    const loadTrending = async () => {
-      try {
-        const data = await fetchTopHeadlines(6);
-        const keywords = data.articles.map(article => {
-          // Extract first 2-3 words of the title or source name as keyword
-          const label = article.source.name === "[Removed]" ? "Global" : article.source.name;
-          return {
-            label: `✨ ${label}`,
-            query: article.title.split(' ').slice(0, 3).join(' ')
-          };
-        }).filter(item => item.label !== "✨ [Removed]");
-        
-        setTrendingKeywords(keywords);
-        
-        // Optionally load initial news
-        if (keywords.length > 0) {
-          handleSearch(keywords[0].query);
-        }
-      } catch (err) {
-        console.error("Failed to load trending", err);
-      }
-    };
-    loadTrending();
-  }, []);
-
-  const handleSearch = async (query: string) => {
+  const handleSearch = useCallback(async (query: string) => {
     setIsLoading(true);
     setError(null);
     setTranslatedTitles({}); // Reset translations
@@ -125,8 +100,8 @@ function App() {
         const titlesToTranslate = filteredArticles.map(a => a.title).join(" ||| ");
         try {
           const res = await fetch(`https://translate.googleapis.com/translate_a/single?client=gtx&sl=en&tl=th&dt=t&q=${encodeURIComponent(titlesToTranslate)}`);
-          const translationData = await res.json();
-          const fullTranslation = translationData[0].map((segment: any) => segment[0]).join("");
+          const translationData = (await res.json()) as GoogleTranslateResponse;
+          const fullTranslation = translationData[0].map((segment) => segment[0]).join("");
           const translatedList = fullTranslation.split(" ||| ");
           
           const newTranslatedTitles: Record<number, string> = {};
@@ -138,12 +113,38 @@ function App() {
           console.error("Headline translation failed", transErr);
         }
       }
-    } catch (err) {
+    } catch {
       setError("Please check your API Key in newsService.ts");
     } finally {
       setIsLoading(false);
     }
-  };
+  }, []);
+
+  useEffect(() => {
+    const loadTrending = async () => {
+      try {
+        const data = await fetchTopHeadlines(6);
+        const keywords = data.articles.map(article => {
+          // Extract first 2-3 words of the title or source name as keyword
+          const label = article.source.name === "[Removed]" ? "Global" : article.source.name;
+          return {
+            label: `✨ ${label}`,
+            query: article.title.split(' ').slice(0, 3).join(' ')
+          };
+        }).filter(item => item.label !== "✨ [Removed]");
+        
+        setTrendingKeywords(keywords);
+        
+        // Optionally load initial news
+        if (keywords.length > 0) {
+          handleSearch(keywords[0].query);
+        }
+      } catch (err) {
+        console.error("Failed to load trending", err);
+      }
+    };
+    loadTrending();
+  }, [handleSearch]);
 
   return (
     <div className="min-h-screen bg-dark-bg text-dark-text pb-10">
