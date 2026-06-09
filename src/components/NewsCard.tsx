@@ -13,6 +13,7 @@ export const NewsCard: React.FC<NewsCardProps> = ({ article, translatedTitle, on
   const keywords = article.title.split(' ')
     .filter(w => w.length > 5)
     .map(w => w.replace(/[^\w]/g, ''))
+    .map(w => w.length > 12 ? w.substring(0, 12) + '...' : w)
     .slice(0, 2);
 
   return (

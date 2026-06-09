@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { SearchBar } from './components/SearchBar';
 import { NewsCard } from './components/NewsCard';
 import { ArticleReader } from './components/ArticleReader';
-import { fetchNews, fetchTopHeadlines } from './services/newsService';
+import { fetchNews, fetchTopHeadlines, fetchSourceTopHeadlines } from './services/newsService';
 import type { NewsArticle } from './types/news';
 import type { GoogleTranslateResponse } from './types/translation';
 
@@ -73,17 +73,40 @@ function App() {
     }
   };
 
-  const [trendingKeywords, setTrendingKeywords] = useState<{ label: string, query: string }[]>([]);
+  const [searchHistory, setSearchHistory] = useState<string[]>([]);
+  const [showAllHistory, setShowAllHistory] = useState(false);
+
+  // Load history on mount
+  useEffect(() => {
+    const saved = localStorage.getItem('read_eng_history');
+    if (saved) {
+      try {
+        setSearchHistory(JSON.parse(saved));
+      } catch (e) {
+        console.error("Failed to parse history", e);
+      }
+    }
+  }, []);
 
   const handleSearch = useCallback(async (query: string) => {
+    if (!query.trim()) return;
+    
     setSearchQuery(query);
     setIsLoading(true);
     setError(null);
-    setTranslatedTitles({}); // Reset translations
+    setTranslatedTitles({}); 
+
+    // Update history
+    setSearchHistory(prev => {
+      const filtered = prev.filter(h => h.toLowerCase() !== query.toLowerCase());
+      const updated = [query, ...filtered].slice(0, 10); // Keep last 10
+      localStorage.setItem('read_eng_history', JSON.stringify(updated));
+      return updated;
+    });
+
     try {
       const data = await fetchNews(query);
       
-      // Filter out articles that contain "copyright" in description but NOT in title
       const filteredArticles = data.articles.filter(article => {
         const titleLower = article.title.toLowerCase();
         const descLower = (article.description || "").toLowerCase();
@@ -98,7 +121,6 @@ function App() {
       if (filteredArticles.length === 0) {
         setError("No relevant articles found for this topic.");
       } else {
-        // Automatically fetch translations for the filtered headlines
         const titlesToTranslate = filteredArticles.map(a => a.title).join(" ||| ");
         try {
           const res = await fetch(`https://translate.googleapis.com/translate_a/single?client=gtx&sl=en&tl=th&dt=t&q=${encodeURIComponent(titlesToTranslate)}`);
@@ -123,32 +145,34 @@ function App() {
   }, []);
 
   useEffect(() => {
-    const loadTrending = async () => {
+    const loadInitialData = async () => {
       try {
-        const data = await fetchTopHeadlines(8);
-        const keywords = data.articles.map(article => {
-          // Extract a better keyword: first 2 words over 3 chars
-          const words = article.title.split(' ').filter(w => w.length > 3).slice(0, 2).join(' ');
-          const source = article.source.name === "[Removed]" ? "Global" : article.source.name;
+        const topData = await fetchTopHeadlines(8);
+        if (topData.articles.length > 0) {
+          setArticles(topData.articles);
           
-          return {
-            label: `✨ ${words || source}`,
-            query: words || article.title
-          };
-        }).filter(item => !item.label.includes("[Removed]"));
-        
-        setTrendingKeywords(keywords);
-        
-        // Optionally load initial news
-        if (keywords.length > 0) {
-          handleSearch(keywords[0].query);
+          const titlesToTranslate = topData.articles.map(a => a.title).join(" ||| ");
+          fetch(`https://translate.googleapis.com/translate_a/single?client=gtx&sl=en&tl=th&dt=t&q=${encodeURIComponent(titlesToTranslate)}`)
+            .then(res => res.json())
+            .then((translationData: GoogleTranslateResponse) => {
+              const fullTranslation = translationData[0].map((segment) => segment[0]).join("");
+              const translatedList = fullTranslation.split(" ||| ");
+              const newTranslatedTitles: Record<number, string> = {};
+              translatedList.forEach((t: string, i: number) => {
+                newTranslatedTitles[i] = t.trim();
+              });
+              setTranslatedTitles(newTranslatedTitles);
+            })
+            .catch(err => console.error("Initial translation failed", err));
         }
       } catch (err) {
-        console.error("Failed to load trending", err);
+        console.error("Failed to load initial data", err);
       }
     };
-    loadTrending();
-  }, [handleSearch]);
+    loadInitialData();
+  }, []);
+
+
 
   return (
     <div className="min-h-screen bg-dark-bg text-dark-text pb-10">
@@ -199,18 +223,36 @@ function App() {
                 {item.label}
               </button>
             ))}
-            
-            {/* Trending Keywords */}
-            {trendingKeywords.map((item, idx) => (
-              <button
-                key={`trend-${idx}`}
-                onClick={() => handleSearch(item.query)}
-                className="bg-slate-800/40 border border-slate-700/50 px-3 py-1 rounded-lg text-[10px] font-bold text-slate-500 hover:bg-slate-700 hover:text-slate-300 transition-all"
-              >
-                {item.label}
-              </button>
-            ))}
           </div>
+            
+          {/* Search History (Recent Searches) */}
+          {searchHistory.length > 0 && (
+            <div className="mt-4 pt-3 border-t border-slate-800/50">
+              <div className="flex justify-between items-center mb-2 px-1">
+                <p className="text-[9px] text-slate-500 font-black uppercase tracking-[0.2em]">Recent Searches</p>
+                {searchHistory.length > 4 && (
+                  <button 
+                    onClick={() => setShowAllHistory(!showAllHistory)}
+                    className="text-[9px] text-dark-accent font-black uppercase tracking-widest hover:underline"
+                  >
+                    {showAllHistory ? "Show Less" : "See More"}
+                  </button>
+                )}
+              </div>
+              <div className="flex flex-wrap gap-1.5">
+                {(showAllHistory ? searchHistory : searchHistory.slice(0, 4)).map((item, idx) => (
+                  <button
+                    key={`history-${idx}`}
+                    onClick={() => handleSearch(item)}
+                    className="bg-slate-800/40 border border-slate-700/50 px-3 py-1.5 rounded-lg text-[10px] font-bold text-slate-400 hover:bg-slate-800 hover:text-slate-200 transition-all flex items-center gap-1.5"
+                  >
+                    <span className="opacity-50">🕒</span>
+                    {item}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
 
         {isLoading && (

@@ -9,7 +9,11 @@ const GUARDIAN_API_KEY = import.meta.env.VITE_GUARDIAN_API_KEY || 'bfdbf913-0f69
 const GUARDIAN_BASE_URL = isDev ? '/api-guardian' : 'https://content.guardianapis.com';
 const GUARDIAN_FIELDS = 'headline,trailText,bodyText,thumbnail';
 const CACHE_TTL_MS = 10 * 60 * 1000;
-const GDELT_MIN_INTERVAL_MS = 5500;
+const GDELT_MIN_INTERVAL_MS = 7500; // Increased to be safer against 429s
+const GUARDIAN_MIN_INTERVAL_MS = 2000; // Adding a small delay for Guardian too
+
+let gdeltThrottledUntil = 0;
+const pendingRequests = new Map<string, Promise<NewsResponse>>();
 
 interface GdeltArticle {
   url: string;
@@ -221,6 +225,10 @@ const getBaseUrl = (base: string, params: URLSearchParams) => {
 };
 
 const requestGdelt = async (query: string, limit: number) => {
+  if (Date.now() < gdeltThrottledUntil) {
+    return { status: 'ok', totalResults: 0, articles: [] };
+  }
+
   const cacheKey = `gdelt:${query}:${limit}`;
   const cached = getCached(cacheKey);
   if (cached) return cached;
@@ -237,6 +245,11 @@ const requestGdelt = async (query: string, limit: number) => {
     const response = await fetch(getBaseUrl(GDELT_BASE_URL, params));
 
     if (!response.ok) {
+      if (response.status === 429) {
+        // Set throttle for 5 minutes if we hit 429
+        gdeltThrottledUntil = Date.now() + 5 * 60 * 1000;
+        console.warn('GDELT 429 detected. Throttling for 5 minutes.');
+      }
       throw new Error(`GDELT API returned ${response.status}`);
     }
 
@@ -262,7 +275,13 @@ const requestGuardian = async (query: string, limit: number) => {
   const cached = getCached(cacheKey);
   if (cached) return cached;
 
-  const cleanedQuery = query.replace(/\bdomain:[^\s]+/g, '').trim() || 'business';
+  // Sanitize query: remove smart quotes and special characters that break Guardian syntax
+  const cleanedQuery = query
+    .replace(/\bdomain:[^\s]+/g, '')
+    .replace(/[‘’“”"'«»]/g, ' ') 
+    .replace(/[^\w\s]/g, ' ') 
+    .trim() || 'business';
+
   const params = new URLSearchParams({
     q: cleanedQuery,
     'order-by': 'newest',
@@ -295,21 +314,41 @@ const requestGuardian = async (query: string, limit: number) => {
 };
 
 const requestNews = async (query: string, limit: number): Promise<NewsResponse> => {
-  try {
-    const gdeltNews = await requestGdelt(query, limit);
-    if (gdeltNews.articles.length > 0) return gdeltNews;
-  } catch (error) {
-    console.error('Error fetching multi-source news:', error);
+  const dedupKey = `${query}:${limit}`;
+  if (pendingRequests.has(dedupKey)) {
+    return pendingRequests.get(dedupKey)!;
   }
 
-  try {
-    const guardianNews = await requestGuardian(query, limit);
-    if (guardianNews.articles.length > 0) return guardianNews;
-  } catch (error) {
-    console.error('Error fetching Guardian news:', error);
-  }
+  const request = (async () => {
+    try {
+      // 1. Try GDELT only if not currently throttled
+      if (Date.now() >= gdeltThrottledUntil) {
+        try {
+          const gdeltNews = await requestGdelt(query, limit);
+          if (gdeltNews.articles.length > 0) return gdeltNews;
+        } catch (error) {
+          console.error('Error fetching GDELT news:', error);
+        }
+      }
 
-  return fallbackArticles(query, limit);
+      // 2. Fallback to Guardian (more stable)
+      try {
+        const guardianNews = await requestGuardian(query, limit);
+        if (guardianNews.articles.length > 0) return guardianNews;
+      } catch (error) {
+        console.error('Error fetching Guardian news:', error);
+      }
+
+      // 3. Last resort fallback
+      return fallbackArticles(query, limit);
+    } finally {
+      // Clear from pending once done
+      pendingRequests.delete(dedupKey);
+    }
+  })();
+
+  pendingRequests.set(dedupKey, request);
+  return request;
 };
 
 export const fetchNews = async (query: string, limit: number = 5): Promise<NewsResponse> => {
@@ -318,4 +357,17 @@ export const fetchNews = async (query: string, limit: number = 5): Promise<NewsR
 
 export const fetchTopHeadlines = async (limit: number = 6): Promise<NewsResponse> => {
   return requestNews('business OR finance OR technology OR stock market', limit);
+};
+
+export const fetchSourceTopHeadlines = async (limit: number = 8): Promise<NewsResponse> => {
+  const sources = [
+    'domain:bbc.com',
+    'domain:reuters.com',
+    'domain:cnbc.com',
+    'domain:forbes.com',
+    'domain:wsj.com',
+    'domain:bloomberg.com'
+  ];
+  const query = `(${sources.join(' OR ')}) (business OR economy OR market)`;
+  return requestNews(query, limit);
 };

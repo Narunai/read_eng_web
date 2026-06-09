@@ -19,15 +19,18 @@ export const ArticleReader: React.FC<ArticleReaderProps> = ({ title, content, ur
   const articleKeywords = title.split(' ')
     .filter(w => w.length > 5)
     .map(w => w.replace(/[^\w]/g, ''))
+    .map(w => w.length > 12 ? w.substring(0, 12) + '...' : w)
     .slice(0, 3);
   
   // Clean the content from extra tags, noise, and copyright info
   const cleanContent = (text: string) => {
     return text
+      .replace(/<[^>]*>?/gm, '') // Remove HTML tags
       .replace(/\[\+\d+ chars\]/g, "") // Remove [+xxx chars]
       .replace(/Copyright\s?©.*$/gi, "") // Remove right notices at the end
       .replace(/All\s?rights\s?reserved.*$/gi, "") // Remove All rights reserved
       .replace(/Follow\s?Us\s?On\s?Social\s?Media.*$/gi, "") // Remove social media noise
+      .replace(/\n\s*\n/g, '\n\n') // Normalize multiple newlines
       .trim();
   };
 
