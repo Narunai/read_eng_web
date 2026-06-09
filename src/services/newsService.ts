@@ -3,7 +3,7 @@ import type { NewsArticle, NewsResponse } from '../types/news';
 const isDev = import.meta.env.DEV;
 
 const GDELT_BASE_URL = isDev ? '/api-gdelt' : 'https://api.allorigins.win/raw?url=' + encodeURIComponent('https://api.gdeltproject.org/api/v2/doc/doc');
-const GUARDIAN_API_KEY = import.meta.env.VITE_GUARDIAN_API_KEY || 'test';
+const GUARDIAN_API_KEY = import.meta.env.VITE_GUARDIAN_API_KEY || 'bfdbf913-0f69-42f8-9bab-b41596549306';
 const GUARDIAN_BASE_URL = isDev ? '/api-guardian' : 'https://api.allorigins.win/raw?url=' + encodeURIComponent('https://content.guardianapis.com');
 const GUARDIAN_FIELDS = 'headline,trailText,bodyText,thumbnail';
 const CACHE_TTL_MS = 10 * 60 * 1000;
