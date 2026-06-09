@@ -2,10 +2,17 @@ import React, { useState } from 'react';
 
 interface SearchBarProps {
   onSearch: (query: string) => void;
+  externalQuery?: string;
 }
 
-export const SearchBar: React.FC<SearchBarProps> = ({ onSearch }) => {
+export const SearchBar: React.FC<SearchBarProps> = ({ onSearch, externalQuery }) => {
   const [query, setQuery] = useState('');
+
+  React.useEffect(() => {
+    if (externalQuery) {
+      setQuery(externalQuery);
+    }
+  }, [externalQuery]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -15,7 +22,7 @@ export const SearchBar: React.FC<SearchBarProps> = ({ onSearch }) => {
   };
 
   return (
-    <form onSubmit={handleSubmit} className="mb-10 group">
+    <form onSubmit={handleSubmit} className="mb-6 group">
       <div className="relative flex items-center">
         <div className="absolute left-4 text-slate-500 group-focus-within:text-dark-accent transition-colors">
           <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">

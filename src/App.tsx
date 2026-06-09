@@ -14,6 +14,7 @@ function App() {
   const [error, setError] = useState<string | null>(null);
 
   const [activeCategory, setActiveCategory] = useState<string>("Business");
+  const [searchQuery, setSearchQuery] = useState<string>("");
 
   const categoryData: Record<string, { icon: string, keywords: { label: string, query: string }[] }> = {
     "Business": {
@@ -75,6 +76,7 @@ function App() {
   const [trendingKeywords, setTrendingKeywords] = useState<{ label: string, query: string }[]>([]);
 
   const handleSearch = useCallback(async (query: string) => {
+    setSearchQuery(query);
     setIsLoading(true);
     setError(null);
     setTranslatedTitles({}); // Reset translations
@@ -123,15 +125,17 @@ function App() {
   useEffect(() => {
     const loadTrending = async () => {
       try {
-        const data = await fetchTopHeadlines(6);
+        const data = await fetchTopHeadlines(8);
         const keywords = data.articles.map(article => {
-          // Extract first 2-3 words of the title or source name as keyword
-          const label = article.source.name === "[Removed]" ? "Global" : article.source.name;
+          // Extract a better keyword: first 2 words over 3 chars
+          const words = article.title.split(' ').filter(w => w.length > 3).slice(0, 2).join(' ');
+          const source = article.source.name === "[Removed]" ? "Global" : article.source.name;
+          
           return {
-            label: `✨ ${label}`,
-            query: article.title.split(' ').slice(0, 3).join(' ')
+            label: `✨ ${words || source}`,
+            query: words || article.title
           };
-        }).filter(item => item.label !== "✨ [Removed]");
+        }).filter(item => !item.label.includes("[Removed]"));
         
         setTrendingKeywords(keywords);
         
@@ -148,69 +152,66 @@ function App() {
 
   return (
     <div className="min-h-screen bg-dark-bg text-dark-text pb-10">
-      <div className="max-w-md mx-auto px-5 py-8">
-        <header className="mb-8 flex flex-col items-center text-center">
-          <div className="bg-dark-accent/10 p-3 rounded-2xl mb-4">
+      <div className="max-w-md mx-auto px-5 py-6">
+        <header className="mb-4 flex flex-col items-center text-center">
+          <div className="bg-dark-accent/10 p-3 rounded-2xl mb-3">
             <h1 className="text-4xl font-black text-gradient tracking-tighter">... / READ ENG BRO </h1>
           </div>
         </header>
 
-        <SearchBar onSearch={handleSearch} />
+        <SearchBar onSearch={handleSearch} externalQuery={searchQuery} />
 
-        {/* Category Discovery */}
-        <div className="mb-10">
-          <p className="text-[10px] text-slate-500 font-black uppercase tracking-[0.2em] mb-4 ml-1">Explore Categories</p>
+        {/* Quick Discovery Section */}
+        <div className="mb-8 bg-slate-800/20 p-4 rounded-[2rem] border border-slate-800/50">
+          <p className="text-[9px] text-slate-500 font-black uppercase tracking-[0.2em] mb-3 ml-1">Discover & Trends</p>
           
-          {/* Main Categories Scroll */}
-          <div className="flex gap-3 overflow-x-auto pb-4 no-scrollbar -mx-5 px-5">
+          {/* Main Categories Scroll (Smaller) */}
+          <div className="flex gap-2 overflow-x-auto pb-3 no-scrollbar">
             {Object.keys(categoryData).map((cat) => (
               <button
                 key={cat}
-                onClick={() => setActiveCategory(cat)}
+                onClick={() => {
+                  setActiveCategory(cat);
+                  handleSearch(cat);
+                }}
                 className={`
-                  flex items-center gap-2 px-5 py-3 rounded-2xl whitespace-nowrap font-bold transition-all
+                  flex items-center gap-1.5 px-3 py-1.5 rounded-xl whitespace-nowrap text-xs font-bold transition-all
                   ${activeCategory === cat 
-                    ? 'bg-dark-accent text-dark-bg scale-105 shadow-lg shadow-dark-accent/20' 
-                    : 'bg-slate-800/40 text-slate-400 border border-slate-700/50 hover:bg-slate-800'}
+                    ? 'bg-dark-accent text-dark-bg scale-105 shadow-md shadow-dark-accent/20' 
+                    : 'bg-slate-800/60 text-slate-400 border border-slate-700/50 hover:bg-slate-800'}
                 `}
               >
-                <span>{categoryData[cat].icon}</span>
+                <span className="text-sm">{categoryData[cat].icon}</span>
                 {cat}
               </button>
             ))}
           </div>
 
-          {/* Sub Keywords for Active Category */}
-          <div className="flex flex-wrap gap-2 mt-4 animate-slide-up">
+          {/* Combined Keywords & Trends (Compact) */}
+          <div className="flex flex-wrap gap-1.5 mt-2">
+            {/* Sub Keywords */}
             {categoryData[activeCategory].keywords.map((item, idx) => (
               <button
-                key={idx}
+                key={`sub-${idx}`}
                 onClick={() => handleSearch(item.query)}
-                className="bg-slate-800/20 border border-slate-800 px-4 py-2 rounded-xl text-xs font-bold text-slate-400 hover:bg-dark-accent/10 hover:border-dark-accent/30 hover:text-dark-accent transition-all active:scale-95"
+                className="bg-dark-accent/5 border border-dark-accent/10 px-3 py-1 rounded-lg text-[10px] font-bold text-dark-accent/70 hover:bg-dark-accent/20 hover:text-dark-accent transition-all active:scale-95"
+              >
+                {item.label}
+              </button>
+            ))}
+            
+            {/* Trending Keywords */}
+            {trendingKeywords.map((item, idx) => (
+              <button
+                key={`trend-${idx}`}
+                onClick={() => handleSearch(item.query)}
+                className="bg-slate-800/40 border border-slate-700/50 px-3 py-1 rounded-lg text-[10px] font-bold text-slate-500 hover:bg-slate-700 hover:text-slate-300 transition-all"
               >
                 {item.label}
               </button>
             ))}
           </div>
         </div>
-
-        {/* Dynamic Trends Section */}
-        {trendingKeywords.length > 0 && (
-          <div className="mb-10">
-            <p className="text-[10px] text-slate-500 font-black uppercase tracking-[0.2em] mb-4 ml-1">Hot Trends</p>
-            <div className="flex flex-wrap gap-2">
-              {trendingKeywords.map((item, idx) => (
-                <button
-                  key={idx}
-                  onClick={() => handleSearch(item.query)}
-                  className="bg-slate-800/40 border border-slate-700/50 px-4 py-2 rounded-2xl text-[11px] font-bold text-slate-400 hover:bg-dark-accent/10 hover:border-dark-accent/50 hover:text-dark-accent transition-all"
-                >
-                  {item.label}
-                </button>
-              ))}
-            </div>
-          </div>
-        )}
 
         {isLoading && (
           <div className="flex flex-col items-center justify-center py-20">
@@ -240,6 +241,7 @@ function App() {
               article={article} 
               translatedTitle={translatedTitles[index]}
               onClick={() => setSelectedArticle(article)}
+              onKeywordClick={handleSearch}
             />
           ))}
         </div>
@@ -250,7 +252,9 @@ function App() {
           content={selectedArticle.content || selectedArticle.description || "No content available."}
           title={selectedArticle.title}
           url={selectedArticle.url}
+          imageUrl={selectedArticle.urlToImage}
           onBack={() => setSelectedArticle(null)}
+          onKeywordClick={handleSearch}
         />
       )}
     </div>

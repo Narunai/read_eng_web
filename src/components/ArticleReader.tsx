@@ -5,19 +5,27 @@ interface ArticleReaderProps {
   title: string;
   content: string;
   url: string;
+  imageUrl?: string;
   onBack: () => void;
+  onKeywordClick?: (keyword: string) => void;
 }
 
-export const ArticleReader: React.FC<ArticleReaderProps> = ({ title, content, url, onBack }) => {
+export const ArticleReader: React.FC<ArticleReaderProps> = ({ title, content, url, imageUrl, onBack, onKeywordClick }) => {
   const [selectedWord, setSelectedWord] = useState<string | null>(null);
   const [translation, setTranslation] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+
+  // Simple keyword extraction for display
+  const articleKeywords = title.split(' ')
+    .filter(w => w.length > 5)
+    .map(w => w.replace(/[^\w]/g, ''))
+    .slice(0, 3);
   
   // Clean the content from extra tags, noise, and copyright info
   const cleanContent = (text: string) => {
     return text
       .replace(/\[\+\d+ chars\]/g, "") // Remove [+xxx chars]
-      .replace(/Copyright\s?©.*$/gi, "") // Remove Copyright notices at the end
+      .replace(/Copyright\s?©.*$/gi, "") // Remove right notices at the end
       .replace(/All\s?rights\s?reserved.*$/gi, "") // Remove All rights reserved
       .replace(/Follow\s?Us\s?On\s?Social\s?Media.*$/gi, "") // Remove social media noise
       .trim();
@@ -25,10 +33,36 @@ export const ArticleReader: React.FC<ArticleReaderProps> = ({ title, content, ur
 
   const [articleContent, setArticleContent] = useState(cleanContent(content));
 
+  // Sentence translation states
+  const [sentenceTranslations, setSentenceTranslations] = useState<Record<number, { text: string, loading: boolean }>>({});
+
   // Full translation states
   const [fullTranslation, setFullTranslation] = useState<string | null>(null);
   const [showFullTranslation, setShowFullTranslation] = useState(false);
   const [isFullLoading, setIsFullLoading] = useState(false);
+
+  const handleSentenceTranslate = async (index: number, text: string) => {
+    setSentenceTranslations(prev => ({
+      ...prev,
+      [index]: { text: "", loading: true }
+    }));
+
+    try {
+      const res = await fetch(`https://translate.googleapis.com/translate_a/single?client=gtx&sl=en&tl=th&dt=t&q=${encodeURIComponent(text)}`);
+      const data = (await res.json()) as GoogleTranslateResponse;
+      const translatedText = data[0].map((segment) => segment[0]).join("");
+      
+      setSentenceTranslations(prev => ({
+        ...prev,
+        [index]: { text: translatedText, loading: false }
+      }));
+    } catch {
+      setSentenceTranslations(prev => ({
+        ...prev,
+        [index]: { text: "Translation error", loading: false }
+      }));
+    }
+  };
 
   const handleWordClick = async (word: string) => {
     const cleanWord = word.replace(/[.,/#!$%^&*;:{}=\-_`~()"'[\]]/g, "");
@@ -137,6 +171,18 @@ export const ArticleReader: React.FC<ArticleReaderProps> = ({ title, content, ur
       {/* Content Area */}
       <div className="flex-1 overflow-y-auto px-6 py-8 pb-40">
         <div className="max-w-prose mx-auto">
+          {/* Main Article Image */}
+          {imageUrl && (
+            <div className="mb-8 -mx-6 relative h-64 overflow-hidden shadow-2xl">
+              <img 
+                src={imageUrl} 
+                alt={title} 
+                className="w-full h-full object-cover"
+              />
+              <div className="absolute inset-0 bg-gradient-to-t from-dark-bg/60 to-transparent"></div>
+            </div>
+          )}
+
           {/* Full Translation Box */}
           {showFullTranslation && fullTranslation && (
             <div className="mb-8 bg-dark-accent/5 border border-dark-accent/20 p-5 rounded-3xl animate-slide-up">
@@ -153,24 +199,60 @@ export const ArticleReader: React.FC<ArticleReaderProps> = ({ title, content, ur
           <div className="space-y-6">
             {sentences.map((sentence, sIdx) => {
               const sentenceWords = sentence.trim().split(/\s+/);
+              const translationState = sentenceTranslations[sIdx];
+
               return (
-                <div key={sIdx} className="text-left bg-white/[0.03] p-5 rounded-[2rem] border border-white/[0.05] shadow-inner">
-                  {sentenceWords.map((word, wIdx) => (
-                    <React.Fragment key={wIdx}>
-                      <span 
-                        onClick={() => handleWordClick(word)}
-                        className={`
-                          inline-block px-1 rounded-md text-xl leading-relaxed transition-all cursor-pointer
-                          ${selectedWord === word.replace(/[.,/#!$%^&*;:{}=\-_`~()"'[\]]/g, "") 
-                            ? 'bg-dark-accent text-dark-bg font-bold scale-110' 
-                            : 'hover:bg-dark-accent/10 hover:text-dark-accent'}
-                        `}
-                      >
-                        {word}
-                      </span>
-                      {" "}
-                    </React.Fragment>
-                  ))}
+                <div key={sIdx} className="relative group">
+                  <div className="text-left bg-white/[0.03] p-5 rounded-[2rem] border border-white/[0.05] shadow-inner">
+                    {sentenceWords.map((word, wIdx) => (
+                      <React.Fragment key={wIdx}>
+                        <span 
+                          onClick={() => handleWordClick(word)}
+                          className={`
+                            inline-block px-1 rounded-md text-xl leading-relaxed transition-all cursor-pointer
+                            ${selectedWord === word.replace(/[.,/#!$%^&*;:{}=\-_`~()"'[\]]/g, "") 
+                              ? 'bg-dark-accent text-dark-bg font-bold scale-110' 
+                              : 'hover:bg-dark-accent/10 hover:text-dark-accent'}
+                          `}
+                        >
+                          {word}
+                        </span>
+                        {" "}
+                      </React.Fragment>
+                    ))}
+
+                    <button
+                      onClick={() => handleSentenceTranslate(sIdx, sentence)}
+                      className={`
+                        inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[9px] font-black uppercase tracking-wider transition-all align-middle ml-2 mb-1
+                        ${translationState?.text 
+                          ? 'bg-dark-accent text-dark-bg' 
+                          : 'bg-slate-800 text-slate-400 hover:bg-slate-700'}
+                      `}
+                    >
+                      {translationState?.loading ? (
+                        <span className="w-2.5 h-2.5 border-2 border-dark-bg border-t-transparent rounded-full animate-spin"></span>
+                      ) : (
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M3 5h12M9 3v2m1.048 9.5A18.022 18.022 0 016.412 9m6.088 9h7M11 21l5-10 5 10M12.751 5C11.783 10.77 8.07 15.61 3 18.129" />
+                        </svg>
+                      )}
+                      Translate
+                    </button>
+                  </div>
+
+                  {/* Sentence Translation Result */}
+                  {translationState?.text && (
+                    <div className="mt-3 bg-dark-accent/10 border border-dark-accent/20 p-5 rounded-[2rem] animate-slide-up shadow-inner">
+                      <p className="text-[10px] text-dark-accent font-black uppercase tracking-widest mb-2 flex items-center gap-2">
+                        <span className="w-1 h-1 bg-dark-accent rounded-full"></span>
+                        Thai Translation
+                      </p>
+                      <p className="text-lg font-medium text-dark-accent/90 leading-relaxed">
+                        {translationState.text}
+                      </p>
+                    </div>
+                  )}
                 </div>
               );
             })}
@@ -201,6 +283,27 @@ export const ArticleReader: React.FC<ArticleReaderProps> = ({ title, content, ur
               </svg>
             </a>
           </div>
+
+          {/* Article Keywords */}
+          {articleKeywords.length > 0 && (
+            <div className="mt-12 p-6 bg-slate-800/30 rounded-[2rem] border border-slate-800/50">
+              <p className="text-[10px] text-slate-500 font-black uppercase tracking-[0.2em] mb-4 text-center">Related Topics</p>
+              <div className="flex flex-wrap justify-center gap-2">
+                {articleKeywords.map((kw, i) => (
+                  <button 
+                    key={i}
+                    onClick={() => {
+                      onKeywordClick?.(kw);
+                      onBack();
+                    }}
+                    className="bg-slate-800 hover:bg-dark-accent/10 border border-slate-700 hover:border-dark-accent/30 text-slate-400 hover:text-dark-accent px-4 py-2 rounded-xl text-xs font-bold transition-all active:scale-95"
+                  >
+                    #{kw.toLowerCase()}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
       </div>
 

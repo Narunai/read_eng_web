@@ -28,8 +28,16 @@ A mobile-optimized web application for learning business English through news, f
 - Implemented content cleaning to remove copyright/noise.
 - Added dynamic "Explore by Category" and "Hot Trends" UI.
 - Implemented automatic Thai translation for headlines in the news feed.
+- **Fixed and Enhanced Keyword Functionality:**
+  - Category clicks now trigger immediate searches.
+  - Search bar now reflects the active keyword or category query.
+  - Improved trending keyword generation with more relevant topics.
+  - Added interactive hashtag keywords to `NewsCard` and `ArticleReader` for deeper discovery.
+  - Synchronized keyword clicks across all components for a seamless experience.
 
 ### Deployment & Stability
 - Configured Vite for GitHub Pages deployment (`base` path, relative URLs).
 - Fixed build-time TypeScript errors.
 - Cleaned unused code and refined component logic.
+
+ล่าสุดฉันสั่งแกไข ฟังชั่น keyword ทั้งหมดไป เพราะใช้งานไม่ได้ คุณช่วยอ่านไฟล์ที่เกี่ยวข้อและดำเนินการต่อให้เรียบร้อยได้หรือไม่
