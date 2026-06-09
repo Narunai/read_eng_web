@@ -2,9 +2,9 @@ import type { NewsArticle, NewsResponse } from '../types/news';
 
 const isDev = import.meta.env.DEV;
 
-const GDELT_BASE_URL = isDev ? '/api-gdelt' : 'https://api.gdeltproject.org/api/v2/doc/doc';
+const GDELT_BASE_URL = isDev ? '/api-gdelt' : 'https://api.allorigins.win/raw?url=' + encodeURIComponent('https://api.gdeltproject.org/api/v2/doc/doc');
 const GUARDIAN_API_KEY = import.meta.env.VITE_GUARDIAN_API_KEY || 'test';
-const GUARDIAN_BASE_URL = isDev ? '/api-guardian' : 'https://content.guardianapis.com';
+const GUARDIAN_BASE_URL = isDev ? '/api-guardian' : 'https://api.allorigins.win/raw?url=' + encodeURIComponent('https://content.guardianapis.com');
 const GUARDIAN_FIELDS = 'headline,trailText,bodyText,thumbnail';
 const CACHE_TTL_MS = 10 * 60 * 1000;
 const GDELT_MIN_INTERVAL_MS = 5500;
@@ -209,6 +209,12 @@ const fallbackArticles = (query: string, limit: number): NewsResponse => {
   };
 };
 
+const getBaseUrl = (base: string, params: URLSearchParams) => {
+  if (isDev) return `${base}?${params.toString()}`;
+  const separator = base.includes('?') ? '&' : '?';
+  return `${base}${separator}${params.toString()}`;
+};
+
 const requestGdelt = async (query: string, limit: number) => {
   const cacheKey = `gdelt:${query}:${limit}`;
   const cached = getCached(cacheKey);
@@ -223,7 +229,7 @@ const requestGdelt = async (query: string, limit: number) => {
       sort: 'DateDesc',
     });
 
-    const response = await fetch(`${GDELT_BASE_URL}?${params.toString()}`);
+    const response = await fetch(getBaseUrl(GDELT_BASE_URL, params));
 
     if (!response.ok) {
       throw new Error(`GDELT API returned ${response.status}`);
@@ -260,7 +266,8 @@ const requestGuardian = async (query: string, limit: number) => {
     'api-key': GUARDIAN_API_KEY,
   });
 
-  const response = await fetch(`${GUARDIAN_BASE_URL}/search?${params.toString()}`);
+  const fullBase = isDev ? `${GUARDIAN_BASE_URL}/search` : GUARDIAN_BASE_URL + encodeURIComponent('/search');
+  const response = await fetch(getBaseUrl(fullBase, params));
 
   if (!response.ok) {
     const errorText = await response.text();
