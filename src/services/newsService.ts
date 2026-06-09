@@ -2,9 +2,11 @@ import type { NewsArticle, NewsResponse } from '../types/news';
 
 const isDev = import.meta.env.DEV;
 
-const GDELT_BASE_URL = isDev ? '/api-gdelt' : 'https://api.allorigins.win/raw?url=' + encodeURIComponent('https://api.gdeltproject.org/api/v2/doc/doc');
+// Production: Use corsproxy.io for GDELT as it's more stable for slow APIs.
+// Production: Use Guardian DIRECTLY now that we have a real API key (to avoid double CORS headers).
+const GDELT_BASE_URL = isDev ? '/api-gdelt' : 'https://corsproxy.io/?' + encodeURIComponent('https://api.gdeltproject.org/api/v2/doc/doc');
 const GUARDIAN_API_KEY = import.meta.env.VITE_GUARDIAN_API_KEY || 'bfdbf913-0f69-42f8-9bab-b41596549306';
-const GUARDIAN_BASE_URL = isDev ? '/api-guardian' : 'https://api.allorigins.win/raw?url=' + encodeURIComponent('https://content.guardianapis.com');
+const GUARDIAN_BASE_URL = isDev ? '/api-guardian' : 'https://content.guardianapis.com';
 const GUARDIAN_FIELDS = 'headline,trailText,bodyText,thumbnail';
 const CACHE_TTL_MS = 10 * 60 * 1000;
 const GDELT_MIN_INTERVAL_MS = 5500;
@@ -211,8 +213,11 @@ const fallbackArticles = (query: string, limit: number): NewsResponse => {
 
 const getBaseUrl = (base: string, params: URLSearchParams) => {
   if (isDev) return `${base}?${params.toString()}`;
-  const separator = base.includes('?') ? '&' : '?';
-  return `${base}${separator}${params.toString()}`;
+  // If base already contains a proxy with encoded URL, append params carefully
+  if (base.includes('corsproxy.io')) {
+    return `${base}${encodeURIComponent('?' + params.toString())}`;
+  }
+  return `${base}?${params.toString()}`;
 };
 
 const requestGdelt = async (query: string, limit: number) => {
@@ -266,7 +271,7 @@ const requestGuardian = async (query: string, limit: number) => {
     'api-key': GUARDIAN_API_KEY,
   });
 
-  const fullBase = isDev ? `${GUARDIAN_BASE_URL}/search` : GUARDIAN_BASE_URL + encodeURIComponent('/search');
+  const fullBase = `${GUARDIAN_BASE_URL}/search`;
   const response = await fetch(getBaseUrl(fullBase, params));
 
   if (!response.ok) {
