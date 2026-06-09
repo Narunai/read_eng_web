@@ -10,7 +10,6 @@ const GUARDIAN_BASE_URL = isDev ? '/api-guardian' : 'https://content.guardianapi
 const GUARDIAN_FIELDS = 'headline,trailText,bodyText,thumbnail';
 const CACHE_TTL_MS = 10 * 60 * 1000;
 const GDELT_MIN_INTERVAL_MS = 7500; // Increased to be safer against 429s
-const GUARDIAN_MIN_INTERVAL_MS = 2000; // Adding a small delay for Guardian too
 
 let gdeltThrottledUntil = 0;
 const pendingRequests = new Map<string, Promise<NewsResponse>>();

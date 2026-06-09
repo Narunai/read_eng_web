@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { SearchBar } from './components/SearchBar';
 import { NewsCard } from './components/NewsCard';
 import { ArticleReader } from './components/ArticleReader';
-import { fetchNews, fetchTopHeadlines, fetchSourceTopHeadlines } from './services/newsService';
+import { fetchNews, fetchTopHeadlines } from './services/newsService';
 import type { NewsArticle } from './types/news';
 import type { GoogleTranslateResponse } from './types/translation';
 
